@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  name              String
+  passwordHash      String
+  role              String
+  schoolId          String?
+  school            School?   @relation(fields: [schoolId], references: [id])
+  yearGroup         String?
+  title             String?
+  resetTokenHash    String?
+  resetTokenExpires DateTime?
+  createdAt         DateTime  @default(now())
+
+  taughtClasses    Class[]         @relation("TeacherClasses")
+  enrollments      Enrollment[]
+  submissions      Submission[]
+  scores           Score[]
+  aiInteractions   AiInteraction[] @relation("AiUser")
+  approvedInsights AiInteraction[] @relation("ApprovedBy")
+  tickets          SupportTicket[]
+  invitationsSent  Invitation[]    @relation("InvitedBy")
+  audits           AuditLog[]
+  subscriptions    Subscription[]
+  invoices         Invoice[]
+}
+
+model School {
+  id        String   @id @default(cuid())
+  name      String
+  city      String
+  status    String   @default("ACTIVE")
+  createdAt DateTime @default(now())
+
+  users         User[]
+  classes       Class[]
+  subscriptions Subscription[]
+  invitations   Invitation[]
+  tickets       SupportTicket[]
+  invoices      Invoice[]
+}
+
+model Subscription {
+  id         String   @id @default(cuid())
+  plan       String
+  status     String   @default("ACTIVE")
+  slots      Int
+  extraSlots Int      @default(0)
+  priceEgp   Int
+  schoolId   String?
+  school     School?  @relation(fields: [schoolId], references: [id])
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id])
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  label     String
+  amountEgp Int
+  status    String
+  issuedAt  DateTime @default(now())
+}
+
+model Class {
+  id        String  @id @default(cuid())
+  name      String
+  subject   String
+  yearGroup String
+  schoolId  String
+  school    School  @relation(fields: [schoolId], references: [id])
+  teacherId String
+  teacher   User    @relation("TeacherClasses", fields: [teacherId], references: [id])
+  room      String?
+
+  enrollments Enrollment[]
+  materials   Material[]
+  sessions    LiveSession[]
+  homework    Homework[]
+  assessments Assessment[]
+  topics      Topic[]
+}
+
+model Enrollment {
+  id        String   @id @default(cuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  studentId String
+  student   User     @relation(fields: [studentId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([classId, studentId])
+}
+
+model Material {
+  id        String   @id @default(cuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  title     String
+  kind      String
+  body      String   @default("")
+  minutes   Int?
+  createdAt DateTime @default(now())
+}
+
+model LiveSession {
+  id        String   @id @default(cuid())
+  classId   String
+  class     Class    @relation(fields: [classId], references: [id])
+  title     String
+  startsAt  DateTime
+  endsAt    DateTime
+  hostName  String
+}
+
+model Homework {
+  id           String   @id @default(cuid())
+  classId      String
+  class        Class    @relation(fields: [classId], references: [id])
+  title        String
+  instructions String
+  topic        String
+  dueAt        DateTime
+  points       Int
+  status       String   @default("DRAFT")
+  createdAt    DateTime @default(now())
+
+  questions      Question[]
+  submissions    Submission[]
+  aiInteractions AiInteraction[]
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  homeworkId    String
+  homework      Homework @relation(fields: [homeworkId], references: [id], onDelete: Cascade)
+  order         Int
+  type          String
+  prompt        String
+  choices       String?
+  correctAnswer String?
+  rubric        String?
+  points        Int
+  answers       Answer[]
+}
+
+model Submission {
+  id          String    @id @default(cuid())
+  homeworkId  String
+  homework    Homework  @relation(fields: [homeworkId], references: [id])
+  studentId   String
+  student     User      @relation(fields: [studentId], references: [id])
+  status      String    @default("NOT_STARTED")
+  grade       Float?
+  feedback    String?
+  submittedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+  answers     Answer[]
+
+  @@unique([homeworkId, studentId])
+}
+
+model Answer {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  questionId   String
+  question     Question   @relation(fields: [questionId], references: [id])
+  value        String
+  updatedAt    DateTime   @updatedAt
+
+  @@unique([submissionId, questionId])
+}
+
+model Topic {
+  id      String @id @default(cuid())
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+  name    String
+  scores  Score[]
+}
+
+model Assessment {
+  id      String   @id @default(cuid())
+  classId String
+  class   Class    @relation(fields: [classId], references: [id])
+  title   String
+  kind    String
+  heldAt  DateTime
+  scores  Score[]
+}
+
+model Score {
+  id           String     @id @default(cuid())
+  assessmentId String
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
+  studentId    String
+  student      User       @relation(fields: [studentId], references: [id])
+  topicId      String
+  topic        Topic      @relation(fields: [topicId], references: [id])
+  points       Float
+  maxPoints    Float
+}
+
+model AiInteraction {
+  id               String    @id @default(cuid())
+  type             String
+  userId           String
+  user             User      @relation("AiUser", fields: [userId], references: [id])
+  homeworkId       String?
+  homework         Homework? @relation(fields: [homeworkId], references: [id])
+  questionId       String?
+  targetStudentId  String?
+  classId          String?
+  input            String
+  output           String
+  evidenceScoreIds String    @default("[]")
+  status           String    @default("GENERATED")
+  approvedById     String?
+  approvedBy       User?     @relation("ApprovedBy", fields: [approvedById], references: [id])
+  tokenCount       Int       @default(0)
+  costEgp          Float     @default(0)
+  createdAt        DateTime  @default(now())
+}
+
+model SupportTicket {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  schoolId  String?
+  school    School?  @relation(fields: [schoolId], references: [id])
+  subject   String
+  category  String
+  message   String
+  status    String   @default("OPEN")
+  createdAt DateTime @default(now())
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  email       String
+  name        String
+  role        String
+  schoolId    String
+  school      School   @relation(fields: [schoolId], references: [id])
+  status      String
+  token       String   @unique
+  subject     String?
+  invitedById String?
+  invitedBy   User?    @relation("InvitedBy", fields: [invitedById], references: [id])
+  sentAt      DateTime @default(now())
+  expiresAt   DateTime
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id])
+  action     String
+  targetType String
+  targetId   String
+  metadata   String   @default("{}")
+  ip         String
+  createdAt  DateTime @default(now())
+}
